@@ -1,0 +1,7 @@
+{
+  "name": "CloudKitchen Pro",
+  "description": "A production-ready Cloud Kitchen management system with local-radius ordering, real-time tracking, and integrated admin dashboard.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
