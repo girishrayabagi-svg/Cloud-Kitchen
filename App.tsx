@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link } from 'react-router-dom';
 import { db } from './firebase'; 
 import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 
@@ -303,12 +303,12 @@ const CustomerApp = () => {
 // --- 3. MAIN APP ROUTING ---
 const App = () => {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<CustomerApp />} />
         <Route path="/admin" element={<AdminPanel />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 
