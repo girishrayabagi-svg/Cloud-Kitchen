@@ -1,272 +1,314 @@
-
 import React, { useState, useEffect } from 'react';
-import Layout from './components/Layout';
-import Hero from './components/Hero';
-import MenuSection from './components/MenuSection';
-import CartSidebar from './components/CartSidebar';
-import AddressPicker from './components/AddressPicker';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { CartProvider, useCart } from './context/CartContext';
-import { Order, OrderStatus } from './types';
-import { RAZORPAY_KEY_ID, BASE_DELIVERY_CHARGE, FREE_DELIVERY_THRESHOLD } from './constants';
+import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { db } from './firebase'; 
+import { collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc } from 'firebase/firestore';
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+// --- CONSTANTS ---
+const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag'; 
+const CATEGORIES = ["All", "Biryani", "Burgers", "Pizza", "South Indian"];
 
-const Toast: React.FC<{ message: string }> = ({ message }) => (
-  <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] animate-fade-in-up">
-    <div className="bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
-      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-      <p className="text-sm font-bold">{message} added to cart!</p>
-    </div>
-  </div>
-);
+const MOCK_MENU = [
+  { id: '1', name: 'Hyderabadi Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
+  { id: '2', name: 'Cheese Lava Burger', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
+  { id: '3', name: 'Masala Dosa', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
+  { id: '4', name: 'Farmhouse Pizza', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
+  { id: '5', name: 'Chicken Pepperoni', description: 'Classic pepperoni pizza.', price: 549, category: 'Pizza', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800' },
+  { id: '6', name: 'Idli Vada Set', description: 'Steamed rice cakes with donuts.', price: 99, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800' },
+];
 
-const CloudKitchenApp: React.FC = () => {
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [showAddressPicker, setShowAddressPicker] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
-  const { cart, clearCart, cartTotal, lastAddedItem } = useCart();
-  const { isAuthenticated, login, user } = useAuth();
+// --- 1. ADMIN PANEL (Separate Page) ---
+const AdminPanel = () => {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [password, setPassword] = useState('');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const deliveryCharge = cartTotal >= FREE_DELIVERY_THRESHOLD ? 0 : BASE_DELIVERY_CHARGE;
-  const totalPayableAmount = cartTotal + deliveryCharge;
-
-  const handleCheckout = () => {
-    if (!isAuthenticated) {
-      login('customer@example.com', 'user');
-    }
-    setIsCartOpen(false);
-    setShowAddressPicker(true);
-  };
-
-  const createOrderInBackend = async (paymentData: any, address: string, coords: { lat: number, lng: number }) => {
-    // In a production app, this would be a POST request to your Node.js/MongoDB API
-    // const response = await fetch('/api/orders', { method: 'POST', body: JSON.stringify(...) });
-    // return await response.json();
-    
-    console.log("Simulating backend storage in MongoDB...");
-    return new Promise<Order>((resolve) => {
-      setTimeout(() => {
-        const newOrder: Order = {
-          id: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-          userId: user?.id || 'guest',
-          items: [...cart],
-          totalAmount: totalPayableAmount,
-          status: OrderStatus.PENDING,
-          address,
-          coordinates: coords,
-          createdAt: new Date().toISOString(),
-          paymentId: paymentData.razorpay_payment_id,
-          deliveryTime: '35 mins'
-        };
-        resolve(newOrder);
-      }, 1000);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const q = query(collection(db, "orders"), orderBy("timestamp", "desc"));
+    return onSnapshot(q, (snapshot) => {
+      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
+  }, [isAuthenticated]);
+
+  const updateStatus = async (id: string, status: string) => {
+    await updateDoc(doc(db, "orders", id), { status });
   };
 
-  const onAddressValidated = (address: string, coords: { lat: number; lng: number }) => {
-    setShowAddressPicker(false);
-    setPaymentError(null);
-
-    const options = {
-      key: RAZORPAY_KEY_ID,
-      amount: totalPayableAmount * 100, // Amount in paise
-      currency: 'INR',
-      name: 'CloudKitchen Pro',
-      description: 'Payment for your delicious meal',
-      image: 'https://cdn-icons-png.flaticon.com/512/3443/3443338.png',
-      handler: async function (response: any) {
-        setIsProcessing(true);
-        try {
-          const order = await createOrderInBackend(response, address, coords);
-          setActiveOrder(order);
-          clearCart();
-        } catch (err) {
-          setPaymentError("Payment verification failed. Please contact support.");
-        } finally {
-          setIsProcessing(false);
-        }
-      },
-      prefill: {
-        name: user?.name || '',
-        email: user?.email || '',
-        contact: user?.phone || '9876543210'
-      },
-      theme: {
-        color: '#f97316' // Orange-500
-      },
-      modal: {
-        ondismiss: function() {
-          setPaymentError("Payment was cancelled. Please try again to complete your order.");
-        }
-      }
-    };
-
-    try {
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response: any) {
-        setPaymentError(`Payment Failed: ${response.error.description}`);
-      });
-      rzp.open();
-    } catch (err) {
-      setPaymentError("Unable to initialize payment gateway. Please check your connection.");
-    }
-  };
+  // Simple Security Check
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-8 rounded-xl shadow-lg w-96">
+          <h2 className="text-2xl font-bold mb-4">Kitchen Login</h2>
+          <input 
+            type="password" 
+            placeholder="Enter Admin Password" 
+            className="w-full border p-2 rounded mb-4"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button 
+            onClick={() => password === 'admin123' ? setIsAuthenticated(true) : alert('Wrong Password')}
+            className="w-full bg-gray-900 text-white py-2 rounded font-bold"
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <Layout>
-      {isProcessing && (
-        <div className="fixed inset-0 z-[200] bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center">
-          <div className="w-16 h-16 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-4" />
-          <h2 className="text-xl font-bold text-gray-800">Finalizing your order...</h2>
-          <p className="text-gray-500">Storing order in our kitchen database</p>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-black text-gray-900">Kitchen Dashboard</h1>
+          <Link to="/" className="text-orange-500 font-bold hover:underline">Go to Website</Link>
         </div>
-      )}
 
-      {paymentError && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[150] w-full max-w-md px-4 animate-scale-up">
-          <div className="bg-red-50 border border-red-200 p-4 rounded-2xl shadow-xl flex items-start gap-4">
-            <div className="bg-red-100 p-2 rounded-full text-red-600">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div className="flex-grow">
-              <h4 className="font-bold text-red-900">Oops! Something went wrong</h4>
-              <p className="text-sm text-red-700 mt-1">{paymentError}</p>
-              <button 
-                onClick={() => setPaymentError(null)}
-                className="mt-3 text-sm font-bold text-red-800 hover:underline"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {lastAddedItem && <Toast message={lastAddedItem} />}
-
-      {!activeOrder ? (
-        <>
-          <Hero />
-          <MenuSection />
-          
-          <div className="fixed bottom-6 right-6 z-40">
-            <button 
-              onClick={() => setIsCartOpen(true)}
-              className="bg-orange-500 text-white h-14 w-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 group-hover:rotate-12 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-              </svg>
-              {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-gray-900 text-white text-[10px] font-bold h-6 w-6 rounded-full flex items-center justify-center border-2 border-orange-500">
-                  {cart.reduce((a, b) => a + b.quantity, 0)}
-                </span>
-              )}
-            </button>
-          </div>
-
-          <CartSidebar 
-            isOpen={isCartOpen} 
-            onClose={() => setIsCartOpen(false)} 
-            onCheckout={handleCheckout}
-          />
-        </>
-      ) : (
-        <div className="max-w-3xl mx-auto px-4 py-12 animate-scale-up">
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-            <div className="text-center mb-8">
-              <div className="inline-block p-4 bg-green-100 rounded-full mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {orders.map((order) => (
+            <div key={order.id} className={`bg-white p-6 rounded-xl shadow-sm border-l-8 ${
+              order.status === 'Completed' ? 'border-green-500 opacity-60' : 
+              order.status === 'Preparing' ? 'border-orange-500' : 'border-red-500'
+            }`}>
+              <div className="flex justify-between mb-4">
+                <span className="font-bold text-gray-400">#{order.id.slice(-5)}</span>
+                <span className="font-bold text-sm bg-gray-100 px-3 py-1 rounded-full">{order.status}</span>
               </div>
-              <h2 className="text-3xl font-black">Order Confirmed!</h2>
-              <p className="text-gray-500 mt-2 font-mono">ID: {activeOrder.id}</p>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-gray-50 rounded-2xl p-6">
-                <h3 className="font-bold text-lg mb-4">Status Tracking</h3>
-                <div className="space-y-6 relative before:absolute before:left-4 before:top-4 before:bottom-4 before:w-0.5 before:bg-gray-200">
-                  <div className="relative pl-10">
-                    <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center z-10">
-                      <div className="w-2 h-2 bg-white rounded-full"></div>
-                    </div>
-                    <p className="font-bold text-gray-800">Order Placed</p>
-                    <p className="text-xs text-gray-500">We have received your order</p>
-                  </div>
-                  <div className="relative pl-10">
-                    <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center z-10">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-ping"></div>
-                    </div>
-                    <p className="font-bold text-gray-800">Preparing</p>
-                    <p className="text-xs text-gray-500">Chef is working on your meal</p>
-                  </div>
-                  <div className="relative pl-10 opacity-30">
-                    <div className="absolute left-0 top-1 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center z-10"></div>
-                    <p className="font-bold text-gray-800">On the Way</p>
-                    <p className="text-xs text-gray-500">Delivery partner picked up</p>
-                  </div>
-                </div>
+              
+              {/* Customer Details */}
+              <div className="mb-4 bg-blue-50 p-3 rounded-lg text-sm">
+                <p><span className="font-bold">Name:</span> {order.customerName}</p>
+                <p><span className="font-bold">Phone:</span> {order.phone}</p>
+                <p><span className="font-bold">Address:</span> {order.address}</p>
               </div>
 
-              <div className="border rounded-2xl p-6">
-                <h3 className="font-bold mb-3 flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  </svg>
-                  Delivery Address
-                </h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{activeOrder.address}</p>
-                <div className="mt-4 h-40 bg-gray-50 border border-dashed border-gray-200 rounded-xl flex items-center justify-center text-gray-400 text-sm font-medium">
-                  <div className="flex flex-col items-center">
-                    <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mb-2 animate-bounce">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-3.44A20.01 20.01 0 016.586 13M9 11V9m0 2h2m-2 0v2m0-2H7" />
-                      </svg>
-                    </div>
-                    Live tracking will appear here soon...
+              <div className="space-y-2 mb-4 border-b pb-4">
+                {order.items.map((item: any, idx: number) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span>{item.quantity} x {item.name}</span>
+                    <span className="font-bold">₹{item.price * item.quantity}</span>
                   </div>
-                </div>
+                ))}
               </div>
 
-              <button 
-                onClick={() => setActiveOrder(null)}
-                className="w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg"
-              >
-                Order More Food
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => updateStatus(order.id, "Preparing")} className="bg-orange-100 text-orange-700 font-bold py-2 rounded">Start Cooking</button>
+                <button onClick={() => updateStatus(order.id, "Completed")} className="bg-green-100 text-green-700 font-bold py-2 rounded">Order Ready</button>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
-      )}
-
-      {showAddressPicker && (
-        <AddressPicker 
-          onValidated={onAddressValidated} 
-          onCancel={() => setShowAddressPicker(false)} 
-        />
-      )}
-    </Layout>
+      </div>
+    </div>
   );
 };
 
-const App: React.FC = () => {
+// --- 2. CUSTOMER COMPONENTS ---
+
+// New Checkout Form with Separate Fields
+const CheckoutForm = ({ total, onConfirm, onCancel }: any) => {
+  const [details, setDetails] = useState({ name: '', phone: '', address: '' });
+
+  const handleSubmit = () => {
+    if (!details.name || !details.phone || !details.address) {
+      alert("Please fill in all details");
+      return;
+    }
+    onConfirm(details);
+  };
+
   return (
-    <AuthProvider>
-      <CartProvider>
-        <CloudKitchenApp />
-      </CartProvider>
-    </AuthProvider>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel}></div>
+      <div className="bg-white w-full max-w-md rounded-2xl p-8 relative z-10 shadow-2xl animate-scale-up">
+        <h3 className="text-2xl font-bold mb-6">Delivery Details</h3>
+        
+        <div className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+            <input 
+              type="text" 
+              className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none"
+              placeholder="John Doe"
+              onChange={e => setDetails({...details, name: e.target.value})}
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
+            <input 
+              type="tel" 
+              className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none"
+              placeholder="9876543210"
+              onChange={e => setDetails({...details, phone: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Full Address</label>
+            <textarea 
+              className="w-full border rounded-lg p-3 focus:ring-2 focus:ring-orange-500 outline-none"
+              rows={3}
+              placeholder="House No, Street, Landmark..."
+              onChange={e => setDetails({...details, address: e.target.value})}
+            />
+          </div>
+        </div>
+
+        <button 
+          onClick={handleSubmit}
+          className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl hover:bg-orange-600 transition"
+        >
+          Pay ₹{total}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const CustomerApp = () => {
+  const [cart, setCart] = useState<any[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  const cartTotal = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
+
+  const filteredMenu = MOCK_MENU.filter(item => {
+    return (activeCategory === "All" || item.category === activeCategory) &&
+           item.name.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  const addToCart = (item: any) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      return existing ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const updateQty = (id: string, d: number) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0));
+
+  const handlePayment = (details: any) => {
+    if (!(window as any).Razorpay) return alert("Razorpay SDK not loaded");
+    
+    const options = {
+      key: RAZORPAY_KEY_ID,
+      amount: cartTotal * 100,
+      currency: "INR",
+      name: "Cloud Kitchen",
+      description: "Food Order",
+      handler: async function (response: any) {
+        try {
+          // SAVE ORDER TO FIREBASE WITH SEPARATE FIELDS
+          await addDoc(collection(db, "orders"), {
+            items: cart,
+            totalAmount: cartTotal,
+            customerName: details.name,
+            phone: details.phone,
+            address: details.address,
+            status: "Pending",
+            paymentId: response.razorpay_payment_id,
+            timestamp: new Date()
+          });
+          setCart([]);
+          setIsCheckoutOpen(false);
+          alert("Order Placed Successfully!");
+        } catch (e) {
+          alert("Error saving order: " + e);
+        }
+      },
+      prefill: { 
+        name: details.name, 
+        contact: details.phone 
+      },
+      theme: { color: "#F97316" }
+    };
+    new (window as any).Razorpay(options).open();
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
+      {/* Navbar */}
+      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 md:px-8 shadow-sm">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <span className="text-xl font-black text-gray-900">Cloud<span className="text-orange-500">Kitchen</span></span>
+          <button onClick={() => setIsCartOpen(true)} className="font-bold text-gray-700 bg-gray-100 px-4 py-2 rounded-full hover:bg-orange-100 transition">
+            Cart ({cart.reduce((a, b) => a + b.quantity, 0)})
+          </button>
+        </div>
+      </nav>
+
+      {/* Hero & Search */}
+      <div className="bg-gray-900 text-white text-center py-12 px-4">
+        <h1 className="text-4xl font-black mb-4">Taste the Speed</h1>
+        <div className="max-w-xl mx-auto space-y-4">
+          <input 
+            type="text" 
+            placeholder="Search for food..." 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            className="w-full px-4 py-3 rounded-xl text-gray-900 outline-none" 
+          />
+          <div className="flex justify-center gap-2 flex-wrap">
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1 rounded-full text-sm font-bold ${activeCategory === cat ? 'bg-orange-500' : 'bg-gray-800'}`}>{cat}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Menu Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 md:p-8 max-w-6xl mx-auto">
+        {filteredMenu.map((item) => (
+          <div key={item.id} className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-lg transition">
+            <img src={item.image} alt={item.name} className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-100" />
+            <h3 className="font-bold text-lg">{item.name}</h3>
+            <p className="text-sm text-gray-500 mb-4">{item.description}</p>
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-lg">₹{item.price}</span>
+              <button onClick={() => addToCart(item)} className="bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-bold">Add</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cart Sidebar */}
+      {isCartOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setIsCartOpen(false)} />
+          <div className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[70] p-6 flex flex-col shadow-2xl">
+            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Cart</h2><button onClick={() => setIsCartOpen(false)}>×</button></div>
+            <div className="flex-grow overflow-y-auto space-y-4">
+              {cart.map(item => (
+                <div key={item.id} className="flex justify-between items-center border-b pb-2">
+                  <div><p className="font-bold">{item.name}</p><p className="text-xs">₹{item.price}</p></div>
+                  <div className="flex gap-2 items-center bg-gray-100 rounded px-2"><button onClick={() => updateQty(item.id, -1)}>-</button>{item.quantity}<button onClick={() => updateQty(item.id, 1)}>+</button></div>
+                </div>
+              ))}
+            </div>
+            {cart.length > 0 && <button onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold mt-4">Checkout ₹{cartTotal}</button>}
+          </div>
+        </>
+      )}
+
+      {/* Checkout Form Modal */}
+      {isCheckoutOpen && <CheckoutForm total={cartTotal} onConfirm={handlePayment} onCancel={() => setIsCheckoutOpen(false)} />}
+    </div>
+  );
+};
+
+// --- 3. MAIN APP ROUTING ---
+const App = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<CustomerApp />} />
+        <Route path="/admin" element={<AdminPanel />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 
