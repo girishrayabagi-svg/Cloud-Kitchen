@@ -3,40 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Kitchen App</title>
+    <title>Cloud Kitchen Pro</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
     <script src="https://unpkg.com/react-router-dom@5/umd/react-router-dom.min.js"></script>
-
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
-        @keyframes scale-up {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .animate-scale-up {
-            animation: scale-up 0.2s ease-out forwards;
-        }
+        @keyframes slide-down { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-down { animation: slide-down 0.3s ease-out forwards; }
+        
+        /* Veg/Non-Veg Icons */
+        .veg-icon { border: 2px solid #166534; padding: 2px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+        .veg-dot { background-color: #166534; width: 8px; height: 8px; border-radius: 50%; }
+        .non-veg-icon { border: 2px solid #991b1b; padding: 2px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+        .non-veg-dot { background-color: #991b1b; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 8px solid #991b1b; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900">
+<body class="bg-gray-50 text-gray-900 font-sans">
     
     <div id="root"></div>
 
     <script type="text/babel">
         // --- 1. SETUP & IMPORTS ---
         const { useState, useEffect } = React;
-        const { HashRouter, Switch, Route, Link, useHistory } = ReactRouterDOM;
+        const { HashRouter, Switch, Route, Link } = ReactRouterDOM;
 
         // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
         const firebaseConfig = {
@@ -48,26 +44,108 @@
             appId: "YOUR_APP_ID"
         };
 
-        // Initialize Firebase (Compat)
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
         // --- CONSTANTS ---
         const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag'; 
         const CATEGORIES = ["All", "Biryani", "Burgers", "Pizza", "South Indian"];
 
+        // Added 'type' for Veg/Non-Veg
         const MOCK_MENU = [
-            { id: '1', name: 'Hyderabadi Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
-            { id: '2', name: 'Cheese Lava Burger', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
-            { id: '3', name: 'Masala Dosa', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
-            { id: '4', name: 'Farmhouse Pizza', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
-            { id: '5', name: 'Chicken Pepperoni', description: 'Classic pepperoni pizza.', price: 549, category: 'Pizza', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800' },
-            { id: '6', name: 'Idli Vada Set', description: 'Steamed rice cakes with donuts.', price: 99, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800' },
+            { id: '1', name: 'Hyderabadi Chicken Biryani', type: 'non-veg', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
+            { id: '2', name: 'Cheese Lava Burger', type: 'veg', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
+            { id: '3', name: 'Masala Dosa', type: 'veg', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
+            { id: '4', name: 'Farmhouse Pizza', type: 'veg', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
+            { id: '5', name: 'Chicken Pepperoni', type: 'non-veg', description: 'Classic pepperoni pizza.', price: 549, category: 'Pizza', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800' },
+            { id: '6', name: 'Idli Vada Set', type: 'veg', description: 'Steamed rice cakes with donuts.', price: 99, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800' },
         ];
 
-        // --- 2. ADMIN PANEL ---
+        // --- COMPONENTS ---
+
+        // 1. Toast Notification Component
+        const Toast = ({ msg, type, onClose }) => (
+            <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl animate-slide-down font-bold text-white flex items-center gap-2 ${type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+                <span>{type === 'error' ? '⚠️' : '✅'}</span> {msg}
+            </div>
+        );
+
+        // 2. Veg/Non-Veg Icon
+        const FoodTypeIcon = ({ type }) => (
+            <div className={type === 'veg' ? 'veg-icon' : 'non-veg-icon'} title={type}>
+                <div className={type === 'veg' ? 'veg-dot' : 'non-veg-dot'}></div>
+            </div>
+        );
+
+        // 3. Order Tracker Component (NEW)
+        const OrderTracker = ({ onClose }) => {
+            const [phone, setPhone] = useState('');
+            const [orders, setOrders] = useState(null);
+            const [loading, setLoading] = useState(false);
+
+            const fetchOrders = async () => {
+                if(!phone) return;
+                setLoading(true);
+                try {
+                    const q = await db.collection("orders").where("phone", "==", phone).orderBy("timestamp", "desc").get();
+                    setOrders(q.docs.map(doc => ({id: doc.id, ...doc.data()})));
+                } catch(e) {
+                    alert("Error finding orders. Ensure Phone number matches exactly.");
+                }
+                setLoading(false);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-lg rounded-2xl p-6 relative h-[80vh] flex flex-col">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-2xl font-bold">&times;</button>
+                        <h2 className="text-2xl font-black mb-4">Track Your Order 🛵</h2>
+                        
+                        <div className="flex gap-2 mb-6">
+                            <input type="tel" placeholder="Enter Phone Number" className="flex-1 border p-2 rounded-lg" value={phone} onChange={e => setPhone(e.target.value)} />
+                            <button onClick={fetchOrders} className="bg-orange-500 text-white px-4 rounded-lg font-bold">Find</button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto space-y-4">
+                            {loading && <p className="text-center text-gray-500">Searching...</p>}
+                            {orders && orders.length === 0 && <p className="text-center">No orders found.</p>}
+                            {orders && orders.map(order => (
+                                <div key={order.id} className="border p-4 rounded-xl bg-gray-50">
+                                    <div className="flex justify-between mb-2">
+                                        <span className="font-bold text-gray-600">#{order.id.slice(0,5)}</span>
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                            order.status === 'Completed' ? 'bg-green-100 text-green-700' : 
+                                            order.status === 'Preparing' ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-700'
+                                        }`}>{order.status}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mb-2">{new Date(order.timestamp?.seconds * 1000).toLocaleString()}</p>
+                                    <div className="text-sm">
+                                        {order.items.map((i,idx) => <div key={idx}>{i.quantity} x {i.name}</div>)}
+                                    </div>
+                                    <div className="mt-2 pt-2 border-t font-bold flex justify-between">
+                                        <span>Total</span>
+                                        <span>₹{order.totalAmount}</span>
+                                    </div>
+                                    {/* Progress Bar */}
+                                    <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div className={`h-full transition-all duration-1000 ${
+                                            order.status === 'Pending' ? 'w-1/3 bg-red-500' :
+                                            order.status === 'Preparing' ? 'w-2/3 bg-orange-500' : 'w-full bg-green-500'
+                                        }`}></div>
+                                    </div>
+                                    <p className="text-xs text-center mt-1 text-gray-500">
+                                        {order.status === 'Pending' ? 'Order Received' : 
+                                         order.status === 'Preparing' ? 'Kitchen is preparing...' : 'Enjoy your food!'}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 4. ADMIN PANEL (Updated with Refresh) ---
         const AdminPanel = () => {
             const [orders, setOrders] = useState([]);
             const [password, setPassword] = useState('');
@@ -75,53 +153,24 @@
 
             useEffect(() => {
                 if (!isAuthenticated) return;
-                
-                // Firestore Listen (Compat Syntax)
-                const unsubscribe = db.collection("orders")
-                    .orderBy("timestamp", "desc")
-                    .onSnapshot((snapshot) => {
-                        const loadedOrders = snapshot.docs.map(doc => ({
-                            id: doc.id,
-                            ...doc.data()
-                        }));
-                        setOrders(loadedOrders);
-                    }, (error) => {
-                        console.error("Error fetching orders:", error);
-                        alert("Error connecting to Database. Check Config/Console.");
-                    });
-
+                const unsubscribe = db.collection("orders").orderBy("timestamp", "desc")
+                    .onSnapshot(snap => setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
                 return () => unsubscribe();
             }, [isAuthenticated]);
 
             const updateStatus = async (id, status) => {
-                try {
-                    await db.collection("orders").doc(id).update({ status });
-                } catch(e) {
-                    alert("Update failed: " + e.message);
-                }
+                await db.collection("orders").doc(id).update({ status });
             };
 
-            if (!isAuthenticated) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                        <div className="bg-white p-8 rounded-xl shadow-lg w-96">
-                            <h2 className="text-2xl font-bold mb-4">Kitchen Login</h2>
-                            <input 
-                                type="password" 
-                                placeholder="Enter Admin Password" 
-                                className="w-full border p-2 rounded mb-4"
-                                onChange={(e) => setPassword(e.target.value)}
-                            />
-                            <button 
-                                onClick={() => password === 'admin123' ? setIsAuthenticated(true) : alert('Wrong Password')}
-                                className="w-full bg-gray-900 text-white py-2 rounded font-bold"
-                            >
-                                Login
-                            </button>
-                        </div>
+            if (!isAuthenticated) return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                    <div className="bg-white p-8 rounded-xl shadow-lg w-96">
+                        <h2 className="text-2xl font-bold mb-4">Kitchen Login</h2>
+                        <input type="password" placeholder="Password" className="w-full border p-2 rounded mb-4" onChange={(e) => setPassword(e.target.value)} />
+                        <button onClick={() => password === 'admin123' ? setIsAuthenticated(true) : alert('Wrong Password')} className="w-full bg-gray-900 text-white py-2 rounded font-bold">Login</button>
                     </div>
-                );
-            }
+                </div>
+            );
 
             return (
                 <div className="min-h-screen bg-gray-50 p-6">
@@ -130,33 +179,19 @@
                             <h1 className="text-3xl font-black text-gray-900">Kitchen Dashboard</h1>
                             <Link to="/" className="text-orange-500 font-bold hover:underline">Go to Website</Link>
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {orders.map((order) => (
-                                <div key={order.id} className={`bg-white p-6 rounded-xl shadow-sm border-l-8 ${
-                                    order.status === 'Completed' ? 'border-green-500 opacity-60' : 
-                                    order.status === 'Preparing' ? 'border-orange-500' : 'border-red-500'
-                                }`}>
-                                    <div className="flex justify-between mb-4">
-                                        <span className="font-bold text-gray-400">#{order.id.slice(-5)}</span>
-                                        <span className="font-bold text-sm bg-gray-100 px-3 py-1 rounded-full">{order.status}</span>
+                                <div key={order.id} className={`bg-white p-6 rounded-xl shadow-sm border-l-8 ${order.status === 'Completed' ? 'border-green-500 opacity-60' : order.status === 'Preparing' ? 'border-orange-500' : 'border-red-500'}`}>
+                                    <div className="flex justify-between mb-4"><span className="font-bold">#{order.id.slice(0,5)}</span><span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-bold">{order.status}</span></div>
+                                    <div className="mb-4 bg-blue-50 p-3 rounded text-sm">
+                                        <p><strong>To:</strong> {order.customerName}</p>
+                                        <p><strong>Ph:</strong> {order.phone}</p>
+                                        <p><strong>Loc:</strong> {order.address}</p>
                                     </div>
-                                    <div className="mb-4 bg-blue-50 p-3 rounded-lg text-sm">
-                                        <p><span className="font-bold">Name:</span> {order.customerName}</p>
-                                        <p><span className="font-bold">Phone:</span> {order.phone}</p>
-                                        <p><span className="font-bold">Address:</span> {order.address}</p>
-                                    </div>
-                                    <div className="space-y-2 mb-4 border-b pb-4">
-                                        {order.items && order.items.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between text-sm">
-                                                <span>{item.quantity} x {item.name}</span>
-                                                <span className="font-bold">₹{item.price * item.quantity}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <div className="space-y-1 mb-4 border-b pb-4 text-sm">{order.items.map((i, idx) => <div key={idx} className="flex justify-between"><span>{i.quantity}x {i.name}</span><b>₹{i.price*i.quantity}</b></div>)}</div>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => updateStatus(order.id, "Preparing")} className="bg-orange-100 text-orange-700 font-bold py-2 rounded">Start Cooking</button>
-                                        <button onClick={() => updateStatus(order.id, "Completed")} className="bg-green-100 text-green-700 font-bold py-2 rounded">Order Ready</button>
+                                        <button onClick={() => updateStatus(order.id, "Preparing")} className="bg-orange-100 text-orange-700 font-bold py-2 rounded">Start</button>
+                                        <button onClick={() => updateStatus(order.id, "Completed")} className="bg-green-100 text-green-700 font-bold py-2 rounded">Done</button>
                                     </div>
                                 </div>
                             ))}
@@ -166,47 +201,38 @@
             );
         };
 
-        // --- 3. CUSTOMER COMPONENTS ---
-        const CheckoutForm = ({ total, onConfirm, onCancel }) => {
-            const [details, setDetails] = useState({ name: '', phone: '', address: '' });
-
-            const handleSubmit = () => {
-                if (!details.name || !details.phone || !details.address) {
-                    alert("Please fill in all details");
-                    return;
-                }
-                onConfirm(details);
-            };
-
-            return (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel}></div>
-                    <div className="bg-white w-full max-w-md rounded-2xl p-8 relative z-10 shadow-2xl animate-scale-up">
-                        <h3 className="text-2xl font-bold mb-6">Delivery Details</h3>
-                        <div className="space-y-4 mb-6">
-                            <div><label className="block text-sm font-bold text-gray-700 mb-1">Full Name</label><input type="text" className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-orange-500" placeholder="John Doe" onChange={e => setDetails({...details, name: e.target.value})}/></div>
-                            <div><label className="block text-sm font-bold text-gray-700 mb-1">Phone Number</label><input type="tel" className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-orange-500" placeholder="9876543210" onChange={e => setDetails({...details, phone: e.target.value})}/></div>
-                            <div><label className="block text-sm font-bold text-gray-700 mb-1">Full Address</label><textarea className="w-full border rounded-lg p-3 outline-none focus:ring-2 focus:ring-orange-500" rows={3} placeholder="Address..." onChange={e => setDetails({...details, address: e.target.value})}/></div>
-                        </div>
-                        <button onClick={handleSubmit} className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl hover:bg-orange-600 transition">Pay ₹{total}</button>
-                    </div>
-                </div>
-            );
-        };
-
+        // --- 5. CUSTOMER APP ---
         const CustomerApp = () => {
             const [cart, setCart] = useState([]);
             const [isCartOpen, setIsCartOpen] = useState(false);
-            const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+            const [isTrackerOpen, setIsTrackerOpen] = useState(false);
             const [activeCategory, setActiveCategory] = useState("All");
             const [searchTerm, setSearchTerm] = useState("");
-            
-            const cartTotal = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
+            const [toast, setToast] = useState(null); // {msg, type}
 
-            const filteredMenu = MOCK_MENU.filter(item => {
-                return (activeCategory === "All" || item.category === activeCategory) &&
-                       item.name.toLowerCase().includes(searchTerm.toLowerCase());
-            });
+            // Checkout States
+            const [details, setDetails] = useState({ name: '', phone: '', address: '' });
+            const [promoCode, setPromoCode] = useState('');
+            const [discount, setDiscount] = useState(0);
+            const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+
+            const showToast = (msg, type='success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            const cartTotal = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
+            const finalTotal = Math.max(0, cartTotal - discount);
+
+            const applyCoupon = () => {
+                if (promoCode.toUpperCase() === 'WELCOME50') {
+                    setDiscount(50);
+                    showToast("Coupon Applied! ₹50 OFF");
+                } else {
+                    setDiscount(0);
+                    showToast("Invalid Coupon Code", "error");
+                }
+            };
 
             const addToCart = (item) => {
                 setCart(prev => {
@@ -214,25 +240,27 @@
                     return existing ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
                 });
                 setIsCartOpen(true);
+                showToast(`${item.name} added to cart`);
             };
 
             const updateQty = (id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0));
 
-            const handlePayment = (details) => {
-                if (!window.Razorpay) return alert("Razorpay SDK not loaded");
-                
+            const handlePayment = () => {
+                if (!details.name || !details.phone || !details.address) return showToast("Please fill all details", "error");
+                if (!window.Razorpay) return showToast("Payment Error", "error");
+
                 const options = {
                     key: RAZORPAY_KEY_ID,
-                    amount: cartTotal * 100,
+                    amount: finalTotal * 100,
                     currency: "INR",
                     name: "Cloud Kitchen",
                     description: "Food Order",
                     handler: async function (response) {
                         try {
-                            // Firebase Save (Compat Syntax)
                             await db.collection("orders").add({
                                 items: cart,
-                                totalAmount: cartTotal,
+                                totalAmount: finalTotal,
+                                discount: discount,
                                 customerName: details.name,
                                 phone: details.phone,
                                 address: details.address,
@@ -242,10 +270,10 @@
                             });
                             setCart([]);
                             setIsCheckoutOpen(false);
-                            alert("Order Placed Successfully!");
+                            setDiscount(0);
+                            showToast("Order Placed Successfully!");
                         } catch (e) {
-                            console.error(e);
-                            alert("Error saving order: " + e.message);
+                            showToast("Order Failed", "error");
                         }
                     },
                     prefill: { name: details.name, contact: details.phone },
@@ -255,71 +283,117 @@
             };
 
             return (
-                <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
-                    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 md:px-8 shadow-sm">
+                <div className="min-h-screen bg-gray-50 pb-20 md:pb-0 relative">
+                    {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+                    {/* Navbar */}
+                    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 shadow-sm">
                         <div className="max-w-6xl mx-auto flex items-center justify-between">
                             <span className="text-xl font-black text-gray-900">Cloud<span className="text-orange-500">Kitchen</span></span>
-                            <button onClick={() => setIsCartOpen(true)} className="font-bold text-gray-700 bg-gray-100 px-4 py-2 rounded-full hover:bg-orange-100 transition">Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</button>
+                            <div className="flex gap-3">
+                                <button onClick={() => setIsTrackerOpen(true)} className="text-sm font-bold text-gray-600 hover:text-orange-500">Track Order</button>
+                                <button onClick={() => setIsCartOpen(true)} className="font-bold text-white bg-gray-900 px-4 py-2 rounded-full text-sm">
+                                    Cart ({cart.reduce((a, b) => a + b.quantity, 0)})
+                                </button>
+                            </div>
                         </div>
                     </nav>
 
-                    <div className="bg-gray-900 text-white text-center py-12 px-4">
-                        <h1 className="text-4xl font-black mb-4">Taste the Speed</h1>
-                        <div className="max-w-xl mx-auto space-y-4">
-                            <input type="text" placeholder="Search for food..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full px-4 py-3 rounded-xl text-gray-900 outline-none" />
-                            <div className="flex justify-center gap-2 flex-wrap">
-                                {CATEGORIES.map(cat => (
-                                    <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1 rounded-full text-sm font-bold ${activeCategory === cat ? 'bg-orange-500' : 'bg-gray-800'}`}>{cat}</button>
-                                ))}
-                            </div>
+                    {/* Hero */}
+                    <div className="bg-gray-900 text-white text-center py-10 px-4">
+                        <h1 className="text-3xl font-black mb-4">Hungry? We're Open!</h1>
+                        <input type="text" placeholder="Search biryani, pizza..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-3 rounded-xl text-gray-900 outline-none mb-4" />
+                        <div className="flex justify-center gap-2 flex-wrap">
+                            {CATEGORIES.map(cat => (
+                                <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1 rounded-full text-sm font-bold ${activeCategory === cat ? 'bg-orange-500' : 'bg-gray-800'}`}>{cat}</button>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 md:p-8 max-w-6xl mx-auto">
-                        {filteredMenu.map((item) => (
-                            <div key={item.id} className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-lg transition">
-                                <img src={item.image} alt={item.name} className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-100" />
-                                <h3 className="font-bold text-lg">{item.name}</h3>
-                                <p className="text-sm text-gray-500 mb-4">{item.description}</p>
+                    {/* Menu Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 max-w-6xl mx-auto">
+                        {MOCK_MENU.filter(i => (activeCategory === "All" || i.category === activeCategory) && i.name.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
+                            <div key={item.id} className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-lg transition group">
+                                <div className="relative">
+                                    <img src={item.image} className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-100" />
+                                    <div className="absolute top-2 right-2 bg-white p-1 rounded shadow"><FoodTypeIcon type={item.type} /></div>
+                                </div>
+                                <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
+                                <p className="text-xs text-gray-500 mb-4 h-8 overflow-hidden">{item.description}</p>
                                 <div className="flex justify-between items-center">
                                     <span className="font-bold text-lg">₹{item.price}</span>
-                                    <button onClick={() => addToCart(item)} className="bg-gray-900 text-white px-5 py-2 rounded-xl text-sm font-bold">Add</button>
+                                    <button onClick={() => addToCart(item)} className="bg-white border-2 border-gray-200 text-gray-900 hover:bg-gray-900 hover:text-white px-5 py-2 rounded-xl text-sm font-bold transition">ADD</button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
+                    {/* Cart Sidebar */}
                     {isCartOpen && (
                         <>
                             <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setIsCartOpen(false)} />
                             <div className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[70] p-6 flex flex-col shadow-2xl">
-                                <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Cart</h2><button onClick={() => setIsCartOpen(false)}>×</button></div>
+                                <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Your Cart</h2><button onClick={() => setIsCartOpen(false)} className="text-2xl">&times;</button></div>
                                 <div className="flex-grow overflow-y-auto space-y-4">
-                                    {cart.map(item => (
+                                    {cart.length === 0 ? <p className="text-center text-gray-400 mt-10">Cart is empty</p> : cart.map(item => (
                                         <div key={item.id} className="flex justify-between items-center border-b pb-2">
-                                            <div><p className="font-bold">{item.name}</p><p className="text-xs">₹{item.price}</p></div>
+                                            <div className="flex items-center gap-2">
+                                                <FoodTypeIcon type={item.type} />
+                                                <div><p className="font-bold text-sm">{item.name}</p><p className="text-xs">₹{item.price}</p></div>
+                                            </div>
                                             <div className="flex gap-2 items-center bg-gray-100 rounded px-2"><button onClick={() => updateQty(item.id, -1)}>-</button>{item.quantity}<button onClick={() => updateQty(item.id, 1)}>+</button></div>
                                         </div>
                                     ))}
                                 </div>
-                                {cart.length > 0 && <button onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold mt-4">Checkout ₹{cartTotal}</button>}
+                                {cart.length > 0 && (
+                                    <div className="pt-4 border-t">
+                                        <div className="flex justify-between font-bold text-lg mb-4"><span>Total</span><span>₹{cartTotal}</span></div>
+                                        <button onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold">Proceed to Checkout</button>
+                                    </div>
+                                )}
                             </div>
                         </>
                     )}
-                    {isCheckoutOpen && <CheckoutForm total={cartTotal} onConfirm={handlePayment} onCancel={() => setIsCheckoutOpen(false)} />}
+
+                    {/* Checkout Modal */}
+                    {isCheckoutOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCheckoutOpen(false)}></div>
+                            <div className="bg-white w-full max-w-md rounded-2xl p-6 relative z-10 shadow-2xl animate-scale-up max-h-[90vh] overflow-y-auto">
+                                <h3 className="text-xl font-bold mb-4">Final Step</h3>
+                                <div className="space-y-3 mb-6">
+                                    <input type="text" placeholder="Full Name" className="w-full border p-3 rounded-lg" onChange={e => setDetails({...details, name: e.target.value})} />
+                                    <input type="tel" placeholder="Phone Number (For Tracking)" className="w-full border p-3 rounded-lg" onChange={e => setDetails({...details, phone: e.target.value})} />
+                                    <textarea rows={2} placeholder="Address" className="w-full border p-3 rounded-lg" onChange={e => setDetails({...details, address: e.target.value})} />
+                                    
+                                    {/* Promo Code Section */}
+                                    <div className="flex gap-2 pt-2">
+                                        <input type="text" placeholder="Promo Code" className="border border-dashed border-orange-300 bg-orange-50 p-2 rounded flex-1 text-sm uppercase" value={promoCode} onChange={e => setPromoCode(e.target.value)} />
+                                        <button onClick={applyCoupon} className="text-orange-600 font-bold text-sm">APPLY</button>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-50 p-4 rounded-xl mb-4 text-sm">
+                                    <div className="flex justify-between mb-1"><span>Subtotal</span><span>₹{cartTotal}</span></div>
+                                    <div className="flex justify-between mb-1 text-green-600"><span>Discount</span><span>-₹{discount}</span></div>
+                                    <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2"><span>To Pay</span><span>₹{finalTotal}</span></div>
+                                </div>
+                                <button onClick={handlePayment} className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800">Pay Now</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Order Tracker Modal */}
+                    {isTrackerOpen && <OrderTracker onClose={() => setIsTrackerOpen(false)} />}
                 </div>
             );
         };
 
-        // --- 4. MAIN APP ---
-        const App = () => {
-            return (
-                <HashRouter>
-                    <Route exact path="/" component={CustomerApp} />
-                    <Route path="/admin" component={AdminPanel} />
-                </HashRouter>
-            );
-        };
+        const App = () => (
+            <HashRouter>
+                <Route exact path="/" component={CustomerApp} />
+                <Route path="/admin" component={AdminPanel} />
+            </HashRouter>
+        );
 
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
