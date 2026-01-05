@@ -83,14 +83,29 @@
             const [orders, setOrders] = useState(null);
             const [loading, setLoading] = useState(false);
 
-            const fetchOrders = async () => {
+           const fetchOrders = async () => {
                 if(!phone) return;
                 setLoading(true);
                 try {
-                    const q = await db.collection("orders").where("phone", "==", phone).orderBy("timestamp", "desc").get();
-                    setOrders(q.docs.map(doc => ({id: doc.id, ...doc.data()})));
+                    // FIX: Removed .orderBy("timestamp", "desc") to fix the error
+                    const q = await db.collection("orders").where("phone", "==", phone).get();
+                    
+                    if (q.empty) {
+                        setOrders([]);
+                    } else {
+                        // Sort the data manually in JavaScript
+                        const data = q.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                        data.sort((a, b) => {
+                            const timeA = a.timestamp ? a.timestamp.seconds : 0;
+                            const timeB = b.timestamp ? b.timestamp.seconds : 0;
+                            return timeB - timeA; // Newest first
+                        });
+                        setOrders(data);
+                    }
                 } catch(e) {
-                    alert("Error finding orders. Ensure Phone number matches exactly.");
+                    console.error("Tracker Error:", e);
+                    // alert("Error finding orders. Check Console."); 
+                    // You can comment out the alert if you want it to be silent
                 }
                 setLoading(false);
             };
