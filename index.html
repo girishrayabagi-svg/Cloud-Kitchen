@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cloud Kitchen Pro</title>
     
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#F97316">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2921/2921822.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -13,417 +18,508 @@
     <script src="https://unpkg.com/react-router-dom@5/umd/react-router-dom.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
     <style>
         @keyframes slide-down { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .animate-slide-down { animation: slide-down 0.3s ease-out forwards; }
-        
-        /* Veg/Non-Veg Icons */
         .veg-icon { border: 2px solid #166534; padding: 2px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
         .veg-dot { background-color: #166534; width: 8px; height: 8px; border-radius: 50%; }
         .non-veg-icon { border: 2px solid #991b1b; padding: 2px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
         .non-veg-dot { background-color: #991b1b; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 8px solid #991b1b; }
+        /* Disable pull-to-refresh on mobile */
+        body { overscroll-behavior-y: none; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans">
+<body class="bg-gray-50 text-gray-900 font-sans selection:bg-orange-200">
     
     <div id="root"></div>
 
-  <script type="text/babel">
-    // --- 1. SETUP & IMPORTS ---
-    const { useState, useEffect } = React;
-    const { HashRouter, Switch, Route, Link } = ReactRouterDOM;
+    <script type="text/babel">
+        // --- 1. SETUP & IMPORTS ---
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { HashRouter, Switch, Route, Link } = ReactRouterDOM;
 
-    // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
-    const firebaseConfig = {
-        apiKey: "AIzaSyABgkorxRm0qva1-OOZjETj3c5blnTPdTA",
-        authDomain: "cloudkitchen-89fba.firebaseapp.com",
-        projectId: "cloudkitchen-89fba",
-        storageBucket: "cloudkitchen-89fba.firebasestorage.app",
-        messagingSenderId: "499647840766",
-        appId: "1:499647840766:web:2b0465cd1896d2bd2f40af"
-    };
+        // !!! PASTE YOUR FIREBASE CONFIG HERE !!!
+        const firebaseConfig = {
+            apiKey: "AIzaSyABgkorxRm0qva1-OOZjETj3c5blnTPdTA",
+            authDomain: "cloudkitchen-89fba.firebaseapp.com",
+            projectId: "cloudkitchen-89fba",
+            storageBucket: "cloudkitchen-89fba.firebasestorage.app",
+            messagingSenderId: "499647840766",
+            appId: "1:499647840766:web:2b0465cd1896d2bd2f40af"
+        };
 
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const auth = firebase.auth(); // Added Auth
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
-    // --- CONSTANTS ---
-    const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag'; // Replace with Live Key when ready
-    const CATEGORIES = ["All", "Biryani", "Burgers", "Pizza", "South Indian"];
+        // --- CONSTANTS ---
+        const RAZORPAY_KEY_ID = 'rzp_test_1DP5mmOlF5G5ag'; // Use LIVE key for real money
+        const CATEGORIES = ["All", "Biryani", "Burgers", "Pizza", "South Indian"];
+        const NOTIFICATION_SOUND = "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"; // Ding Sound
 
-    // --- COMPONENTS ---
+        // --- HELPER COMPONENTS ---
 
-    const Toast = ({ msg, type, onClose }) => (
-        <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl animate-slide-down font-bold text-white flex items-center gap-2 ${type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
-            <span>{type === 'error' ? '⚠️' : '✅'}</span> {msg}
-        </div>
-    );
+        const Toast = ({ msg, type, onClose }) => (
+            <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[120] px-6 py-3 rounded-full shadow-xl animate-slide-down font-bold text-white flex items-center gap-2 ${type === 'error' ? 'bg-red-500' : 'bg-green-600'}`}>
+                <span>{type === 'error' ? '⚠️' : '✅'}</span> {msg}
+            </div>
+        );
 
-    const FoodTypeIcon = ({ type }) => (
-        <div className={type === 'veg' ? 'veg-icon' : 'non-veg-icon'} title={type}>
-            <div className={type === 'veg' ? 'veg-dot' : 'non-veg-dot'}></div>
-        </div>
-    );
+        const FoodTypeIcon = ({ type }) => (
+            <div className={type === 'veg' ? 'veg-icon' : 'non-veg-icon'} title={type}>
+                <div className={type === 'veg' ? 'veg-dot' : 'non-veg-dot'}></div>
+            </div>
+        );
 
-    // --- 3. OTP LOGIN COMPONENT (NEW) ---
-    const OTPLogin = ({ onLoginSuccess, onClose }) => {
-        const [phone, setPhone] = useState('');
-        const [otp, setOtp] = useState('');
-        const [confirmationResult, setConfirmationResult] = useState(null);
-        const [loading, setLoading] = useState(false);
-        const [error, setError] = useState('');
+        const StarRating = ({ rating, setRating, readonly = false }) => (
+            <div className="flex text-yellow-400">
+                {[1, 2, 3, 4, 5].map(star => (
+                    <span 
+                        key={star} 
+                        onClick={() => !readonly && setRating(star)} 
+                        className={`text-lg cursor-pointer ${readonly ? '' : 'hover:scale-125 transition'}`}
+                    >
+                        {star <= rating ? '★' : '☆'}
+                    </span>
+                ))}
+            </div>
+        );
 
-        useEffect(() => {
-            // Setup Invisible Recaptcha
-            if (!window.recaptchaVerifier) {
-                window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
-                    'size': 'invisible'
+        // --- 2. OTP LOGIN ---
+        const OTPLogin = ({ onLoginSuccess, onClose }) => {
+            const [phone, setPhone] = useState('');
+            const [otp, setOtp] = useState('');
+            const [confirmationResult, setConfirmationResult] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                if (!window.recaptchaVerifier) {
+                    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { 'size': 'invisible' });
+                }
+            }, []);
+
+            const sendOTP = async () => {
+                if (phone.length < 10) return setError("Invalid Phone Number");
+                setLoading(true); setError('');
+                try {
+                    const confirmation = await auth.signInWithPhoneNumber("+91" + phone, window.recaptchaVerifier);
+                    setConfirmationResult(confirmation);
+                    setLoading(false);
+                } catch (error) { setLoading(false); setError(error.message); }
+            };
+
+            const verifyOTP = async () => {
+                setLoading(true);
+                try {
+                    const result = await confirmationResult.confirm(otp);
+                    setLoading(false);
+                    onLoginSuccess(result.user);
+                } catch (error) { setLoading(false); setError("Invalid OTP"); }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-2xl font-bold text-gray-400">&times;</button>
+                        <h2 className="text-2xl font-black mb-1">Login</h2>
+                        <p className="text-gray-500 text-sm mb-6">Verify phone to order & rate food.</p>
+                        {error && <p className="text-red-500 text-sm mb-2 bg-red-50 p-2 rounded">{error}</p>}
+                        {!confirmationResult ? (
+                            <>
+                                <div className="flex border rounded-xl overflow-hidden mb-4 ring-orange-500 focus-within:ring-2">
+                                    <span className="bg-gray-100 px-3 py-3 text-gray-500 font-bold border-r">+91</span>
+                                    <input autoFocus type="tel" className="flex-1 px-3 outline-none font-bold" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} />
+                                </div>
+                                <div id="recaptcha-container"></div>
+                                <button onClick={sendOTP} disabled={loading} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold">{loading ? 'Sending...' : 'Send OTP'}</button>
+                            </>
+                        ) : (
+                            <>
+                                <input autoFocus type="number" className="w-full border p-3 rounded-xl mb-4 font-bold text-center text-xl outline-none focus:border-orange-500" placeholder="Enter OTP" value={otp} onChange={e => setOtp(e.target.value)} />
+                                <button onClick={verifyOTP} disabled={loading} className="w-full bg-green-600 text-white py-3 rounded-xl font-bold">{loading ? 'Verifying...' : 'Login'}</button>
+                            </>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 3. ANALYTICS CHART COMPONENT (SVG) ---
+        const SalesChart = ({ orders }) => {
+            // Calculate last 5 days sales
+            const data = useMemo(() => {
+                const days = {};
+                [0,1,2,3,4].forEach(d => {
+                    const date = new Date();
+                    date.setDate(date.getDate() - d);
+                    days[date.toLocaleDateString('en-GB', {day: 'numeric', month: 'short'})] = 0;
                 });
-            }
-        }, []);
+                orders.forEach(o => {
+                    if(o.timestamp) {
+                        const d = new Date(o.timestamp.seconds * 1000).toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+                        if(days[d] !== undefined) days[d] += o.totalAmount;
+                    }
+                });
+                return Object.entries(days).reverse();
+            }, [orders]);
 
-        const sendOTP = async () => {
-            if (phone.length < 10) return setError("Invalid Phone Number");
-            setLoading(true);
-            setError('');
-            const appVerifier = window.recaptchaVerifier;
-            const phoneNumber = "+91" + phone; // Hardcoded to India (+91)
+            const maxVal = Math.max(...data.map(d => d[1]), 100);
 
-            try {
-                const confirmation = await auth.signInWithPhoneNumber(phoneNumber, appVerifier);
-                setConfirmationResult(confirmation);
-                setLoading(false);
-            } catch (error) {
-                setLoading(false);
-                setError(error.message);
-                console.error("SMS Error:", error);
-            }
-        };
-
-        const verifyOTP = async () => {
-            setLoading(true);
-            try {
-                const result = await confirmationResult.confirm(otp);
-                setLoading(false);
-                onLoginSuccess(result.user);
-            } catch (error) {
-                setLoading(false);
-                setError("Invalid OTP");
-            }
-        };
-
-        return (
-            <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl relative">
-                    <button onClick={onClose} className="absolute top-4 right-4 text-2xl font-bold text-gray-400 hover:text-gray-600">&times;</button>
-                    <h2 className="text-2xl font-black mb-1">Login</h2>
-                    <p className="text-gray-500 text-sm mb-6">Verify your phone to place orders.</p>
-                    
-                    {error && <p className="text-red-500 text-sm mb-2 bg-red-50 p-2 rounded">{error}</p>}
-
-                    {!confirmationResult ? (
-                        <>
-                            <div className="flex border rounded-xl overflow-hidden mb-4 focus-within:ring-2 ring-orange-500 transition">
-                                <span className="bg-gray-100 px-3 py-3 text-gray-500 font-bold border-r">+91</span>
-                                <input autoFocus type="tel" className="flex-1 px-3 outline-none font-bold" placeholder="Phone Number" value={phone} onChange={e => setPhone(e.target.value)} />
+            return (
+                <div className="bg-white p-4 rounded-xl shadow-sm mb-6">
+                    <h3 className="font-bold mb-4 text-gray-700">Sales Trends (Last 5 Days)</h3>
+                    <div className="flex items-end justify-between h-32 gap-2">
+                        {data.map(([date, amount], i) => (
+                            <div key={i} className="flex flex-col items-center flex-1 group">
+                                <div className="text-xs font-bold mb-1 opacity-0 group-hover:opacity-100 transition">₹{amount}</div>
+                                <div className="w-full bg-orange-100 rounded-t-lg relative overflow-hidden" style={{height: `${(amount/maxVal)*100}%`, minHeight: '4px'}}>
+                                    <div className="absolute bottom-0 w-full bg-orange-500 h-full animate-slide-down" style={{animationDuration: '1s'}}></div>
+                                </div>
+                                <div className="text-[10px] text-gray-500 mt-1 font-bold">{date}</div>
                             </div>
-                            {/* Hidden Recaptcha Container */}
-                            <div id="recaptcha-container"></div>
-                            <button onClick={sendOTP} disabled={loading} className={`w-full py-3 rounded-xl font-bold text-white transition ${loading ? 'bg-gray-400' : 'bg-orange-500 hover:bg-orange-600'}`}>
-                                {loading ? 'Sending OTP...' : 'Send OTP'}
-                            </button>
-                        </>
-                    ) : (
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 4. ADMIN PANEL ---
+        const AdminPanel = () => {
+            const [orders, setOrders] = useState([]);
+            const [menuItems, setMenuItems] = useState([]);
+            const [view, setView] = useState('orders'); 
+            const [password, setPassword] = useState('');
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const audioRef = useRef(new Audio(NOTIFICATION_SOUND));
+            const initialLoad = useRef(true);
+
+            // Menu Form
+            const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Biryani', type: 'veg', description: '', image: '' });
+
+            useEffect(() => {
+                if (!isAuthenticated) return;
+                
+                // Sound Alert Logic
+                const unsubOrders = db.collection("orders").orderBy("timestamp", "desc").onSnapshot(snap => {
+                    const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    // If not first load and order count increased, play sound
+                    if (!initialLoad.current && newOrders.length > orders.length) {
+                        const latest = newOrders[0];
+                        if (latest.status === 'Pending') {
+                            audioRef.current.play().catch(e => console.log("Audio block", e));
+                            alert(`🔔 New Order from ${latest.customerName}!`);
+                        }
+                    }
+                    setOrders(newOrders);
+                    initialLoad.current = false;
+                });
+
+                const unsubMenu = db.collection("menu").onSnapshot(snap => setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+                return () => { unsubOrders(); unsubMenu(); };
+            }, [isAuthenticated]);
+
+            const updateStatus = (id, status) => db.collection("orders").doc(id).update({ status });
+            const deleteOrder = (id) => { if(window.confirm("Delete?")) db.collection("orders").doc(id).delete(); };
+            const toggleStock = (item) => db.collection("menu").doc(item.id).update({ isSoldOut: !item.isSoldOut });
+            const deleteMenuItem = (id) => { if(window.confirm("Delete Item?")) db.collection("menu").doc(id).delete(); };
+
+            const addNewItem = async () => {
+                if(!newItem.name || !newItem.price) return alert("Required fields missing");
+                await db.collection("menu").add({ ...newItem, price: Number(newItem.price), ratingSum: 0, ratingCount: 0, isSoldOut: false });
+                setNewItem({ name: '', price: '', category: 'Biryani', type: 'veg', description: '', image: '' });
+                alert("Item Added!");
+            };
+
+            if (!isAuthenticated) return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-100">
+                    <div className="bg-white p-8 rounded-xl shadow-lg w-96">
+                        <h2 className="text-2xl font-bold mb-4">Kitchen Login</h2>
+                        <input type="password" placeholder="Password" className="w-full border p-2 rounded mb-4" onChange={(e) => setPassword(e.target.value)} />
+                        <button onClick={() => password === 'admin123' ? setIsAuthenticated(true) : alert('Wrong Password')} className="w-full bg-gray-900 text-white py-2 rounded font-bold">Login</button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-6">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                            <h1 className="text-3xl font-black text-gray-900">👨‍🍳 Chef Dashboard</h1>
+                            <div className="flex gap-2 bg-white p-1 rounded-lg shadow-sm">
+                                <button onClick={() => setView('orders')} className={`px-4 py-2 rounded font-bold ${view === 'orders' ? 'bg-orange-500 text-white' : 'hover:bg-gray-100'}`}>Orders</button>
+                                <button onClick={() => setView('menu')} className={`px-4 py-2 rounded font-bold ${view === 'menu' ? 'bg-orange-500 text-white' : 'hover:bg-gray-100'}`}>Menu</button>
+                                <button onClick={() => setView('analytics')} className={`px-4 py-2 rounded font-bold ${view === 'analytics' ? 'bg-orange-500 text-white' : 'hover:bg-gray-100'}`}>Analytics</button>
+                            </div>
+                        </div>
+
+                        {view === 'analytics' && <SalesChart orders={orders} />}
+
+                        {view === 'orders' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {orders.map((order) => (
+                                    <div key={order.id} className={`relative bg-white p-6 rounded-xl shadow-sm border-l-8 ${order.status === 'Completed' ? 'border-green-500 opacity-60' : order.status === 'Preparing' ? 'border-orange-500' : 'border-red-500'}`}>
+                                        <button onClick={() => deleteOrder(order.id)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 font-bold p-1">🗑️</button>
+                                        <div className="flex justify-between mb-4 pr-8"><span className="font-bold">#{order.id.slice(0,5)}</span><span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-bold">{order.status}</span></div>
+                                        <div className="mb-4 bg-blue-50 p-3 rounded text-sm"><p><strong>{order.customerName}</strong> ({order.phone})</p><p className="text-xs mt-1 text-gray-500">{order.address}</p></div>
+                                        <div className="space-y-1 mb-4 border-b pb-4 text-sm">{order.items.map((i, idx) => <div key={idx} className="flex justify-between"><span>{i.quantity}x {i.name}</span><b>₹{i.price*i.quantity}</b></div>)}</div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={() => updateStatus(order.id, "Preparing")} className="bg-orange-100 text-orange-700 font-bold py-2 rounded">Start Cooking</button>
+                                            <button onClick={() => updateStatus(order.id, "Completed")} className="bg-green-100 text-green-700 font-bold py-2 rounded">Ready/Done</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {view === 'menu' && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm">
+                                <h2 className="text-xl font-bold mb-4">Add Item</h2>
+                                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
+                                    <input type="text" placeholder="Name" className="col-span-2 border p-2 rounded" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                                    <input type="number" placeholder="Price" className="border p-2 rounded" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
+                                    <select className="border p-2 rounded" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
+                                        {CATEGORIES.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <select className="border p-2 rounded" value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value})}><option value="veg">Veg</option><option value="non-veg">Non-Veg</option></select>
+                                </div>
+                                <input type="text" placeholder="Image URL" className="w-full border p-2 rounded mb-2" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
+                                <button onClick={addNewItem} className="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700 mb-8">Add Item</button>
+                                
+                                <div className="space-y-2">
+                                    {menuItems.map(item => (
+                                        <div key={item.id} className={`flex justify-between items-center border p-3 rounded ${item.isSoldOut ? 'bg-gray-100' : 'bg-white'}`}>
+                                            <div className="flex items-center gap-4">
+                                                <img src={item.image || 'https://via.placeholder.com/150'} className={`w-12 h-12 rounded object-cover ${item.isSoldOut ? 'grayscale' : ''}`} />
+                                                <div>
+                                                    <p className="font-bold flex items-center gap-2">
+                                                        {item.name} 
+                                                        {item.isSoldOut && <span className="text-xs bg-red-100 text-red-600 px-2 rounded">SOLD OUT</span>}
+                                                    </p>
+                                                    <p className="text-sm text-gray-500">₹{item.price} • {item.ratingCount > 0 ? (item.ratingSum/item.ratingCount).toFixed(1) : 'New'}★</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => toggleStock(item)} className={`px-3 py-1 rounded font-bold text-sm border ${item.isSoldOut ? 'bg-green-50 text-green-600 border-green-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                                                    {item.isSoldOut ? 'Mark Available' : 'Mark Sold Out'}
+                                                </button>
+                                                <button onClick={() => deleteMenuItem(item.id)} className="text-red-500 font-bold border border-red-200 px-3 py-1 rounded hover:bg-red-50">Delete</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 5. CUSTOMER APP ---
+        const CustomerApp = () => {
+            const [cart, setCart] = useState([]);
+            const [menuItems, setMenuItems] = useState([]);
+            const [myOrders, setMyOrders] = useState([]);
+            const [isCartOpen, setIsCartOpen] = useState(false);
+            const [activeCategory, setActiveCategory] = useState("All");
+            const [searchTerm, setSearchTerm] = useState("");
+            const [toast, setToast] = useState(null);
+            const [view, setView] = useState('home'); // 'home', 'myorders'
+            
+            // Auth & Checkout
+            const [user, setUser] = useState(null);
+            const [showLogin, setShowLogin] = useState(false);
+            const [details, setDetails] = useState({ name: '', address: '' });
+            const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+
+            useEffect(() => {
+                const unsubMenu = db.collection("menu").onSnapshot(snap => setMenuItems(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+                const unsubAuth = auth.onAuthStateChanged(u => {
+                    setUser(u);
+                    if(u) fetchMyOrders(u.phoneNumber);
+                });
+                return () => { unsubMenu(); unsubAuth(); };
+            }, []);
+
+            const fetchMyOrders = (phone) => {
+                db.collection("orders").where("phone", "==", phone).orderBy("timestamp", "desc").onSnapshot(snap => {
+                    setMyOrders(snap.docs.map(d => ({id: d.id, ...d.data()})));
+                });
+            };
+
+            const rateItem = async (itemId, rating) => {
+                // Simplified rating: just update global sum/count for the item
+                const itemRef = db.collection("menu").doc(itemId);
+                await db.runTransaction(async (t) => {
+                    const doc = await t.get(itemRef);
+                    const newCount = (doc.data().ratingCount || 0) + 1;
+                    const newSum = (doc.data().ratingSum || 0) + rating;
+                    t.update(itemRef, { ratingCount: newCount, ratingSum: newSum });
+                });
+                alert("Thanks for rating! ⭐");
+            };
+
+            const showToast = (msg, type='success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
+            const addToCart = (item) => {
+                if(item.isSoldOut) return;
+                setCart(prev => {
+                    const existing = prev.find(i => i.id === item.id);
+                    return existing ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
+                });
+                setIsCartOpen(true);
+                showToast(`${item.name} added`);
+            };
+            const updateQty = (id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0));
+            const cartTotal = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
+
+            const handleCheckoutClick = () => {
+                if (!user) { setIsCartOpen(false); setShowLogin(true); } 
+                else { setIsCartOpen(false); setIsCheckoutOpen(true); }
+            };
+
+            const handlePayment = () => {
+                if (!details.name || !details.address) return showToast("Enter Details", "error");
+                const options = {
+                    key: RAZORPAY_KEY_ID, amount: cartTotal * 100, currency: "INR", name: "Cloud Kitchen",
+                    handler: async function (response) {
+                        await db.collection("orders").add({
+                            items: cart, totalAmount: cartTotal, customerName: details.name, phone: user.phoneNumber, address: details.address,
+                            status: "Pending", paymentId: response.razorpay_payment_id, timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        setCart([]); setIsCheckoutOpen(false); showToast("Ordered!");
+                    }
+                };
+                new window.Razorpay(options).open();
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20 md:pb-0 relative">
+                    {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+                    {showLogin && <OTPLogin onClose={() => setShowLogin(false)} onLoginSuccess={(u) => { setUser(u); setShowLogin(false); }} />}
+
+                    {/* Navbar */}
+                    <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 shadow-sm">
+                        <div className="max-w-6xl mx-auto flex items-center justify-between">
+                            <span onClick={() => setView('home')} className="text-xl font-black text-gray-900 cursor-pointer">Cloud<span className="text-orange-500">Kitchen</span></span>
+                            <div className="flex gap-3 items-center">
+                                {user ? (
+                                    <button onClick={() => setView('myorders')} className="text-sm font-bold text-gray-600 hover:text-orange-500 flex items-center gap-1">
+                                        👤 <span className="hidden md:inline">My Orders</span>
+                                    </button>
+                                ) : <button onClick={() => setShowLogin(true)} className="text-sm font-bold text-gray-600">Login</button>}
+                                <button onClick={() => setIsCartOpen(true)} className="font-bold text-white bg-gray-900 px-4 py-2 rounded-full text-sm">Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {view === 'home' && (
                         <>
-                            <input autoFocus type="number" className="w-full border p-3 rounded-xl mb-4 font-bold text-center tracking-widest text-xl outline-none focus:border-orange-500 transition" placeholder="Enter 6-digit OTP" value={otp} onChange={e => setOtp(e.target.value)} />
-                            <button onClick={verifyOTP} disabled={loading} className={`w-full py-3 rounded-xl font-bold text-white transition ${loading ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}>
-                                {loading ? 'Verifying...' : 'Verify & Login'}
-                            </button>
+                            <div className="bg-gray-900 text-white text-center py-10 px-4">
+                                <h1 className="text-3xl font-black mb-4">Delicious Food, Delivered.</h1>
+                                <input type="text" placeholder="Search biryani, pizza..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-3 rounded-xl text-gray-900 outline-none mb-4" />
+                                <div className="flex justify-center gap-2 flex-wrap">{CATEGORIES.map(cat => <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1 rounded-full text-sm font-bold ${activeCategory === cat ? 'bg-orange-500' : 'bg-gray-800'}`}>{cat}</button>)}</div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 max-w-6xl mx-auto">
+                                {menuItems.filter(i => (activeCategory === "All" || i.category === activeCategory) && i.name.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => {
+                                    const rating = item.ratingCount > 0 ? (item.ratingSum / item.ratingCount).toFixed(1) : null;
+                                    return (
+                                        <div key={item.id} className={`bg-white rounded-2xl shadow-sm border p-4 transition group ${item.isSoldOut ? 'opacity-75 grayscale' : 'hover:shadow-lg'}`}>
+                                            <div className="relative">
+                                                <img src={item.image || 'https://via.placeholder.com/300'} className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-100" />
+                                                <div className="absolute top-2 right-2 bg-white p-1 rounded shadow"><FoodTypeIcon type={item.type} /></div>
+                                                {item.isSoldOut && <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center font-black text-white text-xl uppercase tracking-widest">Sold Out</div>}
+                                            </div>
+                                            <div className="flex justify-between items-start">
+                                                <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
+                                                {rating && <span className="bg-green-100 text-green-800 text-xs font-bold px-1.5 py-0.5 rounded">⭐ {rating}</span>}
+                                            </div>
+                                            <p className="text-xs text-gray-500 mb-4 h-8 overflow-hidden">{item.description}</p>
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-bold text-lg">₹{item.price}</span>
+                                                <button disabled={item.isSoldOut} onClick={() => addToCart(item)} className={`border-2 px-5 py-2 rounded-xl text-sm font-bold transition ${item.isSoldOut ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-900 hover:bg-gray-900 hover:text-white'}`}>
+                                                    {item.isSoldOut ? 'N/A' : 'ADD'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </>
                     )}
-                </div>
-            </div>
-        );
-    };
 
-    // --- 4. ADMIN PANEL (Standard - No Image Upload) ---
-    const AdminPanel = () => {
-        const [orders, setOrders] = useState([]);
-        const [menuItems, setMenuItems] = useState([]);
-        const [view, setView] = useState('orders'); 
-        const [password, setPassword] = useState('');
-        const [isAuthenticated, setIsAuthenticated] = useState(false);
-        const [newItem, setNewItem] = useState({ name: '', price: '', category: 'Biryani', type: 'veg', description: '', image: '' });
-
-        useEffect(() => {
-            if (!isAuthenticated) return;
-            const unsubOrders = db.collection("orders").orderBy("timestamp", "desc").onSnapshot(snap => setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-            const unsubMenu = db.collection("menu").onSnapshot(snap => setMenuItems(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-            return () => { unsubOrders(); unsubMenu(); };
-        }, [isAuthenticated]);
-
-        const updateStatus = async (id, status) => db.collection("orders").doc(id).update({ status });
-        const deleteOrder = async (id) => { if(window.confirm("Delete order?")) db.collection("orders").doc(id).delete(); };
-        const deleteMenuItem = async (id) => { if(window.confirm("Delete item?")) db.collection("menu").doc(id).delete(); };
-
-        const addNewItem = async () => {
-            if(!newItem.name || !newItem.price) return alert("Name and Price required!");
-            await db.collection("menu").add({ ...newItem, price: Number(newItem.price) });
-            setNewItem({ name: '', price: '', category: 'Biryani', type: 'veg', description: '', image: '' });
-            alert("Item Added!");
-        };
-
-        if (!isAuthenticated) return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-100">
-                <div className="bg-white p-8 rounded-xl shadow-lg w-96">
-                    <h2 className="text-2xl font-bold mb-4">Kitchen Login</h2>
-                    <input type="password" placeholder="Password" className="w-full border p-2 rounded mb-4" onChange={(e) => setPassword(e.target.value)} />
-                    <button onClick={() => password === 'admin123' ? setIsAuthenticated(true) : alert('Wrong Password')} className="w-full bg-gray-900 text-white py-2 rounded font-bold">Login</button>
-                </div>
-            </div>
-        );
-
-        return (
-            <div className="min-h-screen bg-gray-50 p-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-black text-gray-900">Dashboard</h1>
-                        <div className="flex gap-4">
-                            <button onClick={() => setView('orders')} className={`px-4 py-2 rounded font-bold ${view === 'orders' ? 'bg-orange-500 text-white' : 'bg-white'}`}>Orders</button>
-                            <button onClick={() => setView('menu')} className={`px-4 py-2 rounded font-bold ${view === 'menu' ? 'bg-orange-500 text-white' : 'bg-white'}`}>Menu Manager</button>
-                            <Link to="/" className="px-4 py-2 text-blue-600 font-bold underline">Go to Website</Link>
-                        </div>
-                    </div>
-
-                    {view === 'orders' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {orders.map((order) => (
-                                <div key={order.id} className={`relative bg-white p-6 rounded-xl shadow-sm border-l-8 ${order.status === 'Completed' ? 'border-green-500 opacity-60' : order.status === 'Preparing' ? 'border-orange-500' : 'border-red-500'}`}>
-                                    <button onClick={() => deleteOrder(order.id)} className="absolute top-4 right-4 text-gray-400 hover:text-red-600 font-bold p-1">🗑️</button>
-                                    <div className="flex justify-between mb-4 pr-8"><span className="font-bold">#{order.id.slice(0,5)}</span><span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-bold">{order.status}</span></div>
-                                    <div className="mb-4 bg-blue-50 p-3 rounded text-sm"><p><strong>To:</strong> {order.customerName}</p><p><strong>Ph:</strong> {order.phone}</p><p><strong>Loc:</strong> {order.address}</p></div>
-                                    <div className="space-y-1 mb-4 border-b pb-4 text-sm">{order.items.map((i, idx) => <div key={idx} className="flex justify-between"><span>{i.quantity}x {i.name}</span><b>₹{i.price*i.quantity}</b></div>)}</div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={() => updateStatus(order.id, "Preparing")} className="bg-orange-100 text-orange-700 font-bold py-2 rounded">Start</button>
-                                        <button onClick={() => updateStatus(order.id, "Completed")} className="bg-green-100 text-green-700 font-bold py-2 rounded">Done</button>
+                    {view === 'myorders' && (
+                        <div className="max-w-2xl mx-auto p-4">
+                            <h2 className="text-2xl font-bold mb-6">My Orders History</h2>
+                            {myOrders.length === 0 ? <p>No orders yet.</p> : myOrders.map(order => (
+                                <div key={order.id} className="bg-white p-4 rounded-xl shadow-sm border mb-4">
+                                    <div className="flex justify-between mb-2">
+                                        <span className="font-bold">#{order.id.slice(0,5)}</span>
+                                        <span className={`text-sm font-bold ${order.status === 'Completed' ? 'text-green-600' : 'text-orange-600'}`}>{order.status}</span>
                                     </div>
+                                    <div className="text-sm text-gray-500 mb-4">{new Date(order.timestamp?.seconds * 1000).toDateString()}</div>
+                                    <div className="space-y-2 mb-4">
+                                        {order.items.map((item, idx) => (
+                                            <div key={idx} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                                <span className="text-sm">{item.quantity}x {item.name}</span>
+                                                <div className="flex gap-4 items-center">
+                                                    <span className="text-xs text-blue-600 underline cursor-pointer" onClick={() => {
+                                                        const r = prompt(`Rate ${item.name} (1-5):`);
+                                                        if(r && r>=1 && r<=5) rateItem(item.id, parseInt(r));
+                                                    }}>Rate Item</span>
+                                                    <span className="font-bold text-sm">₹{item.price * item.quantity}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="border-t pt-2 flex justify-between font-bold"><span>Total Paid</span><span>₹{order.totalAmount}</span></div>
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="bg-white p-6 rounded-xl shadow-sm">
-                            <h2 className="text-xl font-bold mb-4">Add New Item</h2>
-                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
-                                <input type="text" placeholder="Name" className="col-span-2 border p-2 rounded" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                                <input type="number" placeholder="Price" className="border p-2 rounded" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} />
-                                <select className="border p-2 rounded" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
-                                    {CATEGORIES.filter(c => c !== "All").map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                                <select className="border p-2 rounded" value={newItem.type} onChange={e => setNewItem({...newItem, type: e.target.value})}>
-                                    <option value="veg">Veg</option><option value="non-veg">Non-Veg</option>
-                                </select>
-                            </div>
-                            <input type="text" placeholder="Image URL" className="w-full border p-2 rounded mb-2" value={newItem.image} onChange={e => setNewItem({...newItem, image: e.target.value})} />
-                            <textarea placeholder="Description" className="w-full border p-2 rounded mb-6" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
-                            <button onClick={addNewItem} className="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700">Add Item to Menu</button>
-                            <div className="space-y-2 mt-8">
-                                {menuItems.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center border p-3 rounded hover:bg-gray-50">
-                                        <div className="flex items-center gap-4">
-                                            <img src={item.image || 'https://via.placeholder.com/150'} className="w-12 h-12 rounded object-cover bg-gray-200" />
-                                            <div><p className="font-bold">{item.name}</p><p className="text-sm text-gray-500">₹{item.price} • {item.category}</p></div>
+                    )}
+
+                    {isCartOpen && (
+                        <>
+                            <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setIsCartOpen(false)} />
+                            <div className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[70] p-6 flex flex-col shadow-2xl">
+                                <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Cart</h2><button onClick={() => setIsCartOpen(false)} className="text-2xl">&times;</button></div>
+                                <div className="flex-grow overflow-y-auto space-y-4">
+                                    {cart.length === 0 ? <p className="text-center text-gray-400 mt-10">Empty</p> : cart.map(item => (
+                                        <div key={item.id} className="flex justify-between items-center border-b pb-2">
+                                            <div className="flex items-center gap-2"><FoodTypeIcon type={item.type} /><div><p className="font-bold text-sm">{item.name}</p><p className="text-xs">₹{item.price}</p></div></div>
+                                            <div className="flex gap-2 items-center bg-gray-100 rounded px-2"><button onClick={() => updateQty(item.id, -1)}>-</button>{item.quantity}<button onClick={() => updateQty(item.id, 1)}>+</button></div>
                                         </div>
-                                        <button onClick={() => deleteMenuItem(item.id)} className="text-red-500 font-bold border border-red-200 px-3 py-1 rounded hover:bg-red-50">Delete</button>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
+                                {cart.length > 0 && <button onClick={handleCheckoutClick} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold mt-4">Checkout ₹{cartTotal}</button>}
+                            </div>
+                        </>
+                    )}
+
+                    {isCheckoutOpen && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCheckoutOpen(false)}></div>
+                            <div className="bg-white w-full max-w-md rounded-2xl p-6 relative z-10 shadow-2xl">
+                                <h3 className="text-xl font-bold mb-4">Confirm Delivery</h3>
+                                <input type="text" placeholder="Full Name" className="w-full border p-3 rounded-lg mb-3" onChange={e => setDetails({...details, name: e.target.value})} />
+                                <textarea placeholder="Full Address" className="w-full border p-3 rounded-lg mb-4" onChange={e => setDetails({...details, address: e.target.value})} />
+                                <button onClick={handlePayment} className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl">Pay ₹{cartTotal}</button>
                             </div>
                         </div>
                     )}
                 </div>
-            </div>
+            );
+        };
+
+        const App = () => (
+            <HashRouter>
+                <Route exact path="/" component={CustomerApp} />
+                <Route path="/admin" component={AdminPanel} />
+            </HashRouter>
         );
-    };
 
-    // --- 5. CUSTOMER APP (With OTP & DB Menu) ---
-    const CustomerApp = () => {
-        const [cart, setCart] = useState([]);
-        const [menuItems, setMenuItems] = useState([]);
-        const [isCartOpen, setIsCartOpen] = useState(false);
-        const [activeCategory, setActiveCategory] = useState("All");
-        const [searchTerm, setSearchTerm] = useState("");
-        const [toast, setToast] = useState(null);
-        
-        // Auth State
-        const [user, setUser] = useState(null);
-        const [showLogin, setShowLogin] = useState(false);
-        const [details, setDetails] = useState({ name: '', address: '' });
-        const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-
-        useEffect(() => {
-            // Fetch Menu
-            const unsubscribeMenu = db.collection("menu").onSnapshot(snap => {
-                const data = snap.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                setMenuItems(data);
-            });
-            // Listen for Login
-            const unsubscribeAuth = auth.onAuthStateChanged(u => {
-                if (u) setUser(u);
-            });
-            return () => { unsubscribeMenu(); unsubscribeAuth(); };
-        }, []);
-
-        const showToast = (msg, type='success') => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
-        
-        const addToCart = (item) => {
-            setCart(prev => {
-                const existing = prev.find(i => i.id === item.id);
-                return existing ? prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...item, quantity: 1 }];
-            });
-            setIsCartOpen(true);
-            showToast(`${item.name} added`);
-        };
-        const updateQty = (id, d) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter(i => i.quantity > 0));
-        const cartTotal = cart.reduce((a, b) => a + (b.price * b.quantity), 0);
-
-        const handleCheckoutClick = () => {
-            if (!user) {
-                setIsCartOpen(false);
-                setShowLogin(true); // Open Login if not user
-            } else {
-                setIsCartOpen(false);
-                setIsCheckoutOpen(true);
-            }
-        };
-
-        const handlePayment = () => {
-            if (!details.name || !details.address) return showToast("Please fill all details", "error");
-            if (!window.Razorpay) return showToast("Payment Error", "error");
-
-            const options = {
-                key: RAZORPAY_KEY_ID,
-                amount: cartTotal * 100,
-                currency: "INR",
-                name: "Cloud Kitchen",
-                description: "Food Order",
-                handler: async function (response) {
-                    try {
-                        await db.collection("orders").add({
-                            items: cart,
-                            totalAmount: cartTotal,
-                            customerName: details.name,
-                            phone: user.phoneNumber, // Use the Verified Phone Number
-                            address: details.address,
-                            status: "Pending",
-                            paymentId: response.razorpay_payment_id,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        setCart([]);
-                        setIsCheckoutOpen(false);
-                        showToast("Order Placed Successfully!");
-                    } catch (e) { showToast("Order Failed", "error"); }
-                },
-                prefill: { name: details.name, contact: user.phoneNumber },
-                theme: { color: "#F97316" }
-            };
-            new window.Razorpay(options).open();
-        };
-
-        return (
-            <div className="min-h-screen bg-gray-50 pb-20 md:pb-0 relative">
-                {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-                
-                {/* OTP MODAL */}
-                {showLogin && <OTPLogin onClose={() => setShowLogin(false)} onLoginSuccess={(u) => { setUser(u); setShowLogin(false); setIsCheckoutOpen(true); }} />}
-
-                <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 shadow-sm">
-                    <div className="max-w-6xl mx-auto flex items-center justify-between">
-                        <span className="text-xl font-black text-gray-900">Cloud<span className="text-orange-500">Kitchen</span></span>
-                        <div className="flex gap-3 items-center">
-                            {user ? (
-                                <span className="text-xs font-bold bg-green-100 text-green-800 px-2 py-1 rounded hidden md:inline">
-                                    User: {user.phoneNumber}
-                                </span>
-                            ) : (
-                                <button onClick={() => setShowLogin(true)} className="text-sm font-bold text-gray-600 hover:text-orange-500">Login</button>
-                            )}
-                            <button onClick={() => setIsCartOpen(true)} className="font-bold text-white bg-gray-900 px-4 py-2 rounded-full text-sm">Cart ({cart.reduce((a, b) => a + b.quantity, 0)})</button>
-                        </div>
-                    </div>
-                </nav>
-
-                <div className="bg-gray-900 text-white text-center py-10 px-4">
-                    <h1 className="text-3xl font-black mb-4">Hungry? We're Open!</h1>
-                    <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full max-w-md px-4 py-3 rounded-xl text-gray-900 outline-none mb-4" />
-                    <div className="flex justify-center gap-2 flex-wrap">{CATEGORIES.map(cat => <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-1 rounded-full text-sm font-bold ${activeCategory === cat ? 'bg-orange-500' : 'bg-gray-800'}`}>{cat}</button>)}</div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-4 max-w-6xl mx-auto">
-                    {menuItems.filter(i => (activeCategory === "All" || i.category === activeCategory) && i.name.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
-                        <div key={item.id} className="bg-white rounded-2xl shadow-sm border p-4 hover:shadow-lg transition group">
-                            <div className="relative">
-                                <img src={item.image || 'https://via.placeholder.com/300'} className="w-full h-48 object-cover rounded-xl mb-4 bg-gray-100" />
-                                <div className="absolute top-2 right-2 bg-white p-1 rounded shadow"><FoodTypeIcon type={item.type} /></div>
-                            </div>
-                            <h3 className="font-bold text-lg leading-tight mb-1">{item.name}</h3>
-                            <p className="text-xs text-gray-500 mb-4 h-8 overflow-hidden">{item.description}</p>
-                            <div className="flex justify-between items-center">
-                                <span className="font-bold text-lg">₹{item.price}</span>
-                                <button onClick={() => addToCart(item)} className="bg-white border-2 border-gray-200 text-gray-900 hover:bg-gray-900 hover:text-white px-5 py-2 rounded-xl text-sm font-bold transition">ADD</button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {isCartOpen && (
-                    <>
-                        <div className="fixed inset-0 bg-black/40 z-[60]" onClick={() => setIsCartOpen(false)} />
-                        <div className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-white z-[70] p-6 flex flex-col shadow-2xl">
-                            <div className="flex justify-between mb-6"><h2 className="text-2xl font-bold">Your Cart</h2><button onClick={() => setIsCartOpen(false)} className="text-2xl">&times;</button></div>
-                            <div className="flex-grow overflow-y-auto space-y-4">
-                                {cart.length === 0 ? <p className="text-center text-gray-400 mt-10">Cart is empty</p> : cart.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center border-b pb-2">
-                                        <div className="flex items-center gap-2"><FoodTypeIcon type={item.type} /><div><p className="font-bold text-sm">{item.name}</p><p className="text-xs">₹{item.price}</p></div></div>
-                                        <div className="flex gap-2 items-center bg-gray-100 rounded px-2"><button onClick={() => updateQty(item.id, -1)}>-</button>{item.quantity}<button onClick={() => updateQty(item.id, 1)}>+</button></div>
-                                    </div>
-                                ))}
-                            </div>
-                            {cart.length > 0 && (
-                                <div className="pt-4 border-t">
-                                    <div className="flex justify-between font-bold text-lg mb-4"><span>Total</span><span>₹{cartTotal}</span></div>
-                                    <button onClick={handleCheckoutClick} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold">Proceed to Checkout</button>
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
-
-                {isCheckoutOpen && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsCheckoutOpen(false)}></div>
-                        <div className="bg-white w-full max-w-md rounded-2xl p-6 relative z-10 shadow-2xl animate-scale-up">
-                            <h3 className="text-xl font-bold mb-4">Final Step</h3>
-                            <div className="space-y-3 mb-6">
-                                <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 text-sm">
-                                    <span className="font-bold text-orange-800">Verified Mobile:</span> {user?.phoneNumber}
-                                </div>
-                                <input type="text" placeholder="Full Name" className="w-full border p-3 rounded-lg" onChange={e => setDetails({...details, name: e.target.value})} />
-                                <textarea rows={2} placeholder="Delivery Address" className="w-full border p-3 rounded-lg" onChange={e => setDetails({...details, address: e.target.value})} />
-                            </div>
-                            <button onClick={handlePayment} className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800">Pay ₹{cartTotal}</button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    const App = () => (
-        <HashRouter>
-            <Route exact path="/" component={CustomerApp} />
-            <Route path="/admin" component={AdminPanel} />
-        </HashRouter>
-    );
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-</script>
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
