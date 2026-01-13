@@ -41,7 +41,7 @@ export const MOCK_MENU: any[] = [
     description: 'Crispy fermented crepe filled with spicy potato mash, served with coconut chutney.',
     price: 120,
     category: 'South Indian',
-    image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800',
+    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRYH7H-KRy-dnN9To-d5TJu7dKpY3f_nr0w3Q&s',
     isAvailable: true
   },
   {
