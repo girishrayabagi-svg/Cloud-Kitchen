@@ -9,7 +9,6 @@ export const DELIVERY_RADIUS_KM = 10;
 export const BASE_DELIVERY_CHARGE = 30;
 export const FREE_DELIVERY_THRESHOLD = 500;
 
-export const RAZORPAY_KEY_ID = 'rzp_test_STUB_KEY_12345'; // Replace with real test key for development
 export const API_BASE_URL = 'https://cloud-kitchen-backend.example.com/api'; // Mock backend URL
 
 export const CATEGORIES: string[] = [

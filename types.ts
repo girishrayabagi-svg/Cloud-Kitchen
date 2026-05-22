@@ -40,7 +40,9 @@ export interface Order {
   address: string;
   coordinates: { lat: number; lng: number };
   createdAt: string;
-  paymentId?: string;
+  paymentMethod?: 'qr' | 'cod';
+  paymentStatus?: string;
+  transactionNote?: string;
   deliveryTime?: string;
 }
 

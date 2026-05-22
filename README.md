@@ -15,6 +15,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1EisaOzQ33dowUvTKL89QSx
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+2. Replace `public/payment-qr.svg` with your real QR scanner image, keeping the same filename.
 3. Run the app:
    `npm run dev`
+
+The checkout supports QR scan payment and Cash on Delivery. Online payment gateway integration has been removed.

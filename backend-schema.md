@@ -25,7 +25,9 @@ const OrderSchema = new mongoose.Schema({
   },
   address: String,
   coordinates: { lat: Number, lng: Number },
-  paymentId: String,
+  paymentMethod: { type: String, enum: ['qr', 'cod'], required: true },
+  paymentStatus: String,
+  transactionNote: String,
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -72,8 +74,6 @@ module.exports = router;
 ```
 PORT=5000
 MONGODB_URI=your_mongodb_atlas_uri
-RAZORPAY_KEY_ID=your_key_id
-RAZORPAY_KEY_SECRET=your_key_secret
 GOOGLE_MAPS_API_KEY=your_maps_key
 JWT_SECRET=your_secure_random_string
 ```
