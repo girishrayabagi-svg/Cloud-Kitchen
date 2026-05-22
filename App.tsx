@@ -29,11 +29,11 @@ type CheckoutDetails = {
 };
 
 const MOCK_MENU: MenuItem[] = [
-  { id: '1', name: 'Hyderabadi Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
-  { id: '2', name: 'Cheese Lava Burger', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
+  { id: '1', name: 'Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
+  { id: '2', name: 'Sandwich', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://www.sargento.com/assets/Uploads/Recipe/Image/Sargento11501__FocusFillWyIwLjAwIiwiMC4wMCIsODAwLDQ3OF0_CompressedW10.jpg' },
   { id: '3', name: 'Masala Dosa', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
-  { id: '4', name: 'Farmhouse Pizza', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
-  { id: '5', name: 'Chicken Pepperoni', description: 'Classic pepperoni pizza.', price: 549, category: 'Pizza', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&auto=format&fit=crop' },
+  { id: '4', name: 'Girmit', description: 'North Karnataka's special girmit.', price: 50, category: 'South Indian', image: 'https://i.ytimg.com/vi/N7664RTpMU8/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLC6912yJwEsyq8u-FvvnPAKEKPWuw' },
+  { id: '5', name: 'Chicken Pakoda 50Gm', description: 'Street Style Chicken Pakora.', price: 60, category: 'Pizza', image: 'https://i.ytimg.com/vi/APLIoVmQKhU/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLChOp4HQks5NiW_1Ew233mZqbXjxw' },
   { id: '6', name: 'Idli Vada Set', description: 'Steamed rice cakes with crispy vada.', price: 99, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
 ];
 
