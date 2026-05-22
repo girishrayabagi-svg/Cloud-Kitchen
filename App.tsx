@@ -29,7 +29,7 @@ type CheckoutDetails = {
 };
 
 const MOCK_MENU: MenuItem[] = [
-  { id: '1', name: 'Hyderabadi Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
+  { id: '1', name: 'Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
   { id: '2', name: 'Cheese Lava Burger', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
   { id: '3', name: 'Masala Dosa', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
   { id: '4', name: 'Farmhouse Pizza', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
