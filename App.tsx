@@ -28,8 +28,13 @@ type CheckoutDetails = {
   transactionNote: string;
 };
 
+type CustomerSession = {
+  name: string;
+  phone: string;
+};
+
 const MOCK_MENU: MenuItem[] = [
-  { id: '1', name: 'Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
+  { id: '1', name: 'Hyderabadi Chicken Biryani', description: 'Authentic spice-rich biryani.', price: 349, category: 'Biryani', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&auto=format&fit=crop' },
   { id: '2', name: 'Cheese Lava Burger', description: 'Double patty with molten cheese.', price: 199, category: 'Burgers', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop' },
   { id: '3', name: 'Masala Dosa', description: 'Crispy crepe with potato mash.', price: 120, category: 'South Indian', image: 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&auto=format&fit=crop' },
   { id: '4', name: 'Farmhouse Pizza', description: 'Fresh veggies on sourdough base.', price: 499, category: 'Pizza', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop' },
@@ -43,6 +48,17 @@ const paymentLabel = (method?: PaymentMethod) => {
   if (method === 'cod') return 'Cash on Delivery';
   if (method === 'qr') return 'QR / UPI Scan';
   return 'Not selected';
+};
+
+const CUSTOMER_STORAGE_KEY = 'cloudKitchenCustomer';
+
+const loadCustomer = (): CustomerSession | null => {
+  try {
+    const saved = sessionStorage.getItem(CUSTOMER_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
 };
 
 const AdminPanel = ({ onGoHome }: { onGoHome: () => void }) => {
@@ -281,9 +297,69 @@ const CheckoutForm = ({ total, onConfirm, onCancel }: {
   );
 };
 
+const CustomerLogin = ({ onLogin }: { onLogin: (customer: CustomerSession) => void }) => {
+  const [details, setDetails] = useState({ name: '', phone: '' });
+
+  const handleLogin = () => {
+    const name = details.name.trim();
+    const phone = details.phone.trim();
+
+    if (!name || !phone) {
+      alert('Please enter your name and phone number.');
+      return;
+    }
+
+    if (!/^[0-9]{10}$/.test(phone)) {
+      alert('Please enter a valid 10 digit phone number.');
+      return;
+    }
+
+    onLogin({ name, phone });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white text-gray-900 rounded-2xl shadow-2xl p-6 md:p-8">
+        <div className="mb-6">
+          <h1 className="text-3xl font-black">Cloud<span className="text-orange-500">Kitchen</span></h1>
+          <p className="text-gray-500 mt-2">Login to view the menu, place orders, and check your order status.</p>
+        </div>
+
+        <div className="space-y-4">
+          <label className="block text-sm font-bold text-gray-700">
+            Full Name
+            <input
+              type="text"
+              value={details.name}
+              onChange={(e) => setDetails({ ...details, name: e.target.value })}
+              className="w-full border rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="Your name"
+            />
+          </label>
+          <label className="block text-sm font-bold text-gray-700">
+            Phone Number
+            <input
+              type="tel"
+              inputMode="numeric"
+              value={details.phone}
+              onChange={(e) => setDetails({ ...details, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+              className="w-full border rounded-xl p-3 mt-1 outline-none focus:ring-2 focus:ring-orange-500"
+              placeholder="9876543210"
+            />
+          </label>
+          <button onClick={handleLogin} className="w-full bg-orange-500 text-white py-4 rounded-xl font-bold hover:bg-orange-600">
+            Enter Website
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CustomerApp = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [customer, setCustomer] = useState<CustomerSession | null>(() => loadCustomer());
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
@@ -310,10 +386,26 @@ const CustomerApp = () => {
   }, []);
 
   const customerOrders = useMemo(() => {
-    const phone = orderPhone.trim();
+    const phone = customer?.phone || orderPhone.trim();
     if (!phone) return [];
     return orders.filter((order) => order.phone === phone);
-  }, [orderPhone, orders]);
+  }, [customer, orderPhone, orders]);
+
+  const handleCustomerLogin = (nextCustomer: CustomerSession) => {
+    sessionStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(nextCustomer));
+    setCustomer(nextCustomer);
+    setOrderPhone(nextCustomer.phone);
+  };
+
+  const handleCustomerLogout = () => {
+    sessionStorage.removeItem(CUSTOMER_STORAGE_KEY);
+    setCustomer(null);
+    setCart([]);
+    setIsCartOpen(false);
+    setIsCheckoutOpen(false);
+    setView('menu');
+    setOrderPhone('');
+  };
 
   const addToCart = (item: MenuItem) => {
     setCart((prev) => {
@@ -333,12 +425,14 @@ const CustomerApp = () => {
 
   const placeOrder = async (details: CheckoutDetails) => {
     setIsSavingOrder(true);
+    const orderName = customer?.name || details.name;
+    const orderPhoneValue = customer?.phone || details.phone;
     try {
       await addDoc(collection(db, 'orders'), {
         items: cart,
         totalAmount: cartTotal,
-        customerName: details.name,
-        phone: details.phone,
+        customerName: orderName,
+        phone: orderPhoneValue,
         address: details.address,
         status: 'Pending',
         paymentMethod: details.paymentMethod,
@@ -349,7 +443,7 @@ const CustomerApp = () => {
 
       setCart([]);
       setIsCheckoutOpen(false);
-      setOrderPhone(details.phone);
+      setOrderPhone(orderPhoneValue);
       setView('orders');
       alert('Order placed successfully!');
     } catch (error) {
@@ -359,6 +453,10 @@ const CustomerApp = () => {
     }
   };
 
+  if (!customer) {
+    return <CustomerLogin onLogin={handleCustomerLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b px-4 py-3 md:px-8 shadow-sm">
@@ -367,6 +465,9 @@ const CustomerApp = () => {
           <div className="flex items-center gap-2">
             <button onClick={() => setView('orders')} className="font-bold text-gray-600 hover:text-orange-600 px-3 py-2 rounded-full">
               My Orders
+            </button>
+            <button onClick={handleCustomerLogout} className="hidden sm:inline-flex font-bold text-gray-500 hover:text-red-600 px-3 py-2 rounded-full">
+              Logout
             </button>
             <button onClick={() => setIsCartOpen(true)} className="font-bold text-white bg-gray-900 px-4 py-2 rounded-full hover:bg-orange-600 transition">
               Cart ({totalItems})
@@ -378,6 +479,7 @@ const CustomerApp = () => {
       {view === 'menu' ? (
         <>
           <section className="bg-gray-900 text-white text-center py-10 md:py-14 px-4">
+            <p className="text-orange-300 font-bold mb-2">Welcome, {customer.name}</p>
             <h1 className="text-3xl md:text-5xl font-black mb-4">Taste the Speed</h1>
             <div className="max-w-xl mx-auto space-y-4">
               <input
@@ -416,25 +518,12 @@ const CustomerApp = () => {
           <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-6">
             <div>
               <h1 className="text-3xl font-black text-gray-900">My Orders</h1>
-              <p className="text-gray-500 mt-1">Enter your phone number to check your order status.</p>
+              <p className="text-gray-500 mt-1">Check orders placed with {customer.phone}.</p>
             </div>
             <button onClick={() => setView('menu')} className="bg-orange-500 text-white px-5 py-3 rounded-xl font-bold hover:bg-orange-600">Order More</button>
           </div>
 
-          <input
-            type="tel"
-            inputMode="numeric"
-            value={orderPhone}
-            onChange={(e) => setOrderPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            className="w-full border rounded-xl p-4 mb-5 outline-none focus:ring-2 focus:ring-orange-500"
-            placeholder="Enter your 10 digit phone number"
-          />
-
-          {!orderPhone ? (
-            <div className="bg-white rounded-2xl shadow-sm border p-8 text-center text-gray-500">
-              Your orders will appear here after you enter the phone number used at checkout.
-            </div>
-          ) : customerOrders.length === 0 ? (
+          {customerOrders.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border p-8 text-center">
               <h2 className="text-xl font-bold text-gray-900">No orders found</h2>
               <p className="text-gray-500 mt-2">Check the phone number or place a new order.</p>

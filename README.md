@@ -20,3 +20,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1EisaOzQ33dowUvTKL89QSx
    `npm run dev`
 
 The checkout supports QR scan payment and Cash on Delivery. Online payment gateway integration has been removed.
+
+## Vercel Deployment Note
+
+If the deployed site does not show the latest login page, redeploy the updated project files on Vercel. If you previously opened the site before this change, clear the browser site data for your Vercel domain or open it in an incognito window once.
